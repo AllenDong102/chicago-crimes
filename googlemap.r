@@ -33,13 +33,11 @@ col2 = "#6497b1"
 col3 = "#b3cde0"
 col4 = "#CC0000"
 
-# api key = AIzaSyCm7BZ4MsQho9D6BAhEJ8uvqbzCrRtUKrY
-
 #install.packages("devtools")
 #devtools::install_github("dkahle/ggmap", ref = "tidyup", force=TRUE)
 
 library("ggmap")
-ggmap::register_google(key = "AIzaSyCm7BZ4MsQho9D6BAhEJ8uvqbzCrRtUKrY")
+ggmap::register_google(key = "insert API key here")
 
 # heatmap
 sub <- data1[1:100000]
