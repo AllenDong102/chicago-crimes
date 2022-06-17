@@ -1,0 +1,25 @@
+---
+title: "pie"
+author: "Melody He"
+date: '2022-06-17'
+output: pdf_document
+---
+
+```{r, echo = TRUE, warning = FALSE, message = FALSE}
+library(data.table)
+
+df <- fread("C:\\Users\\melod\\OneDrive\\Desktop\\STAT 405\\Crime.csv")
+
+## Obtain top 8 most common types of crime
+types <- sort(table(df$`Primary Type`), decreasing = TRUE)[1:8]
+## subset data according to arrest and primary type
+arrested <- df[df$Arrest == TRUE & df$`Primary Type`== names(types),]
+types.arrest <- table(arrested$`Primary Type`)
+## calculate percentages for pie chart labels
+lbls <- paste0(round(types.arrest/sum(types.arrest)*100, 2),"%")
+colors <- rainbow(8)
+pie(types.arrest, labels = lbls,
+    main = "Primary Types of Crimes for Arrests", col = colors, 
+    radius = 1, cex = 0.45)
+legend(-2, 0.5, names(types.arrest), cex=0.3, fill = colors)
+```
