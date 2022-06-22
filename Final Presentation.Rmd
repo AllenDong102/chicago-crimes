@@ -1,0 +1,331 @@
+---
+title: "Final Presentation"
+author: "Amber Hu, Melody He, Elaine Liu, Allen Dong"
+date: '2022-06-22'
+output: ioslides_presentation
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(knitr)
+library(tidyverse)
+library(forcats)
+library(gridExtra)
+library(RSQLite)
+library(jsonlite)
+library(gtable)
+library(grid)
+library(latex2exp)
+library(gridBase)
+library(nnet)
+library(magrittr)
+library(ggplot2)
+library(data.table)
+library(ggmap)
+library(ggalluvial)
+library(stringr)
+library(ggpubr)
+library(gridExtra)
+library(psych)
+library(gt)
+library(rgdal)
+library(mapproj)
+library(tidyr)
+
+```
+
+## Shiny Presentation
+
+This R Markdown presentation is made interactive using Shiny. The viewers of the presentation can change the assumptions underlying what's presented and see the results immediately. 
+
+To learn more, see [Interactive Documents](http://rmarkdown.rstudio.com/authoring_shiny.html).
+
+## Interactive Plot
+
+```{r}
+
+```
+
+## Bullets
+
+- Bullet 1
+- Bullet 2
+- Bullet 3
+
+## Location Alluvial Plot
+
+```{r}
+full_data <- fread("/Users/allendong/Desktop/chicagocrimes.csv")
+
+# subsetting data
+data1 <- full_data
+names(data1)[names(data1) == 'Primary Type'] <- 'type'
+names(data1)[names(data1) == 'Location Description'] <- 'location'
+
+data1$location <- str_replace_all(data1$location,
+                                  "PARKING LOT/GARAGE\\(NON\\.RESID\\.\\)", 
+                                  "PARKING LOT/GARAGE")
+
+top_type <- data1 %>% 
+  count(type) %>% 
+  top_n(8, n) %>% 
+  pull(type)
+
+top_location <- data1 %>% 
+  filter(type %in% top_type) %>% 
+  count(location) %>% 
+  top_n(6, n) %>% 
+  pull(location)
+
+filtered_data1 <- data1 %>% 
+  filter(type %in% top_type & location %in% top_location)
+
+grouped_data1 <- filtered_data1 %>% group_by(type, location) %>% summarise(Freq = n())  
+personal_theme = theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data = grouped_data1,
+       aes(axis1 = type, axis2 = location, y = Freq)) +
+  geom_alluvium(aes(fill = location)) +
+  geom_stratum() +
+  geom_text(stat = "stratum",
+            aes(label = after_stat(stratum))) +
+  scale_x_discrete(limits = c('Type of Crime', 'Location of Crime'),
+                   expand = c(0.20, 0.05)) +
+  scale_fill_viridis_d() +
+  theme_void() +
+  theme(legend.position = "none") + 
+  ggtitle("Summary of Crime Cases in Chicago \nMapping Major Types of Crime to Major Locations") +
+  personal_theme
+
+## Source: https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Districts-current-/fthy-xz3r
+df <- fread("/Users/allendong/Desktop/chicagocrimes.csv")
+df <- select(df, -ID, -`Case Number`, -IUCR, -Block, -Description, -`Updated On`, -Ward, -Location)
+
+# import boundaries of police districts
+bounds <- readOGR("/Users/allendong/Desktop/districts.shp")
+# convert to dataframe
+bounds_df <- fortify(bounds)
+bounds_df$id <- as.factor(bounds_df$id)
+
+## map labels for district numbers to id in boundaries dataframe
+labs <- data.frame(bounds$dist_num)
+labs <- mutate(labs, id = strtoi(rownames(labs)) - 1)
+colnames(labs) <- c("District", "id")
+bounds_df <- merge(bounds_df, labs, by = "id")
+labs <- select(labs, District)
+
+# centroid calculations
+centroids <- as.data.frame(coordinates(bounds))
+colnames(centroids) = c("c.long", "c.lat")
+
+## district counts table
+district_counts <- as.data.frame(table(df$District))
+colnames(district_counts) = c("District", "Frequency")
+district_counts$Frequency <- district_counts$Frequency/1000
+
+dis.map <- merge(bounds_df, district_counts, by = 'District', all = TRUE)
+labs.df <- cbind(labs, centroids)
+labs.df <- labs.df[order(as.numeric(labs.df$District)), ]
+## manually adding centroid coordinates for 16th district
+labs.df[15, ] <- c(16, -87.91, 41.98)
+labs.df[nrow(labs.df)+1, ] <- c(16, -87.77, 41.97)
+## convert longitude and latitudes to doubles
+labs.df$c.long <- as.double(labs.df$c.long)
+labs.df$c.lat <- as.double(labs.df$c.lat)
+
+dis.map <- merge(dis.map, labs.df, by = 'District', all = TRUE)
+dis.map <- arrange(dis.map, group, order)
+```
+
+## Title
+```{r, echo = FALSE, warning = FALSE}
+map <- ggplot(dis.map[dis.map$District != 31,], aes(x = long, y = lat, group = group, fill = Frequency)) +
+  coord_map("polyconic") + 
+  geom_polygon(colour = "black")  +
+  ggtitle("Frequency of Crime by Police District") + 
+  scale_fill_gradient(low="white", high="slateblue3") +
+  geom_text(aes(label = `District`, x = c.long, y = c.lat, family = 'serif'), size = 3) + xlab("longitude") + ylab("latitude") + theme(text = element_text(family = "serif"))
+map <- map + labs(fill = "Frequency (in thousands)")
+map
+```
+
+
+```{r, include=FALSE}
+# subset every seventh row
+ggmap::register_google(key = "API KEY")
+
+LatLonCounts <- as.data.frame(table(round(data1$Longitude,2), round(data1$Latitude,2)))
+LatLonCounts$Long <- as.numeric(as.character(LatLonCounts$Var1))
+LatLonCounts$Lat <- as.numeric(as.character(LatLonCounts$Var2))
+LatLonCounts2 <- subset(LatLonCounts, Freq > 0)
+p <- ggmap(get_googlemap(center = c(lon = -87.6298, lat = 41.8781), zoom = 11, scale = 2, maptype ='terrain', color = 'color', alpha = 0.5))
+```
+
+## Location Plot
+
+```{r, warning=FALSE, message = FALSE}
+p + geom_tile(data = LatLonCounts2, aes(x = Long, y = Lat, alpha = Freq), fill = "red")
+```
+
+## Location plot 2
+```{r, warning = FALSE, fig.width = 8, fig.height = 5, message = FALSE}
+sub <- data1[which(1:nrow(data1) %% 56 == 0),]
+p + geom_point(aes(x = Longitude, y = Latitude, col = Arrest), data = sub, alpha = 0.01, size = 3)
+```
+
+```{r, include=FALSE}
+data6 <- full_data
+names(data6)[names(data6) == 'Primary Type'] <- 'type'
+
+top_type <- data6 %>% 
+  count(type) %>% 
+  top_n(10, n) %>% 
+  pull(type)
+
+grouped_data6 <- data6 %>% 
+  filter(type %in% top_type) %>% 
+  group_by(type, Arrest) %>%
+  summarise(Freq = n())   
+```
+
+##
+
+```{r, warning=FALSE, message = FALSE}
+ggplot(data = grouped_data6, aes(fill=Arrest, y=Freq, x=reorder(type, Freq, sum))) + 
+  geom_bar(position="stack", stat="identity") + 
+  ggtitle("Crime Arrest By Primary Type") +
+  scale_fill_viridis_d() + 
+  labs(x = 'Primary Type of Crime', y = 'Frequency of Crime') +
+  theme(axis.text.x = element_text(angle = 25, vjust = 1, hjust=1))
+```
+
+```{r, include=FALSE}
+convert_time <- function(date) {
+  hour <- as.numeric(str_sub(date, 12, 13))
+  is.am <- (str_sub(date, -2, -1) == 'AM') 
+  ifelse(hour == 12, ifelse(is.am, 0, 12), ifelse(is.am, hour, hour + 12))
+}
+
+data4 <- full_data %>%
+  mutate(Time = convert_time(Date)) %>%
+  group_by(Time, Arrest) %>% 
+  summarise(Freq = n())  
+
+```
+
+## Title
+
+```{r, warning=FALSE, message = FALSE}
+ggplot(data = data4, aes(fill=Arrest, y=Freq, x=Time)) + 
+  geom_bar(position="fill", stat="identity") + 
+  ggtitle("Proportion of Crime Arrested By Hour of the Day") +
+  scale_x_continuous(breaks = round(seq(0, 23, by = 1),1)) +
+  scale_fill_viridis_d() +
+  coord_polar() +
+  theme(axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())
+```
+
+```{r, include=FALSE}
+data5 <- full_data %>% 
+  group_by(Year, Arrest) %>%
+  # filter(Year < 2022) %>% 
+  summarise(Freq = n())  
+```
+
+## Title
+
+```{r, warning=FALSE, message = FALSE}
+ggplot(data = data5, aes(fill=Arrest, y=Freq, x=Year)) + 
+  geom_bar(position="fill", stat="identity") + 
+  ggtitle("Proportion of Crime Arrested By Year") +
+  scale_y_continuous(breaks = round(seq(0, 1, by = 0.10),1)) +
+  scale_fill_viridis_d()
+
+df <- fread("/Users/allendong/Desktop/chicagocrimes.csv")
+# df <- select(df, -ID, -`Case Number`, -IUCR, -Block, -Description, -`Updated On`, -Ward, -Location)
+## secondary dataset
+data1 <- fread("/Users/allendong/Desktop/poverty.csv")
+data1 <- data1[1:77,]
+```
+
+## Title
+
+```{r, warning = FALSE, fig.width = 6, fig.height = 6, message = FALSE}
+library(psych)
+g1 <- ggplot(data = data1, aes(x = `PERCENT HOUSEHOLDS BELOW POVERTY`)) + 
+  geom_histogram(binwidth = 10, color = "plum", fill = "plum1") + xlab("% Households Below Poverty") + ylab("Frequency")
+g2 <- ggplot(data = data1, aes(x = `PERCENT AGED 16+ UNEMPLOYED`)) + 
+  geom_histogram(binwidth = 10, color = "paleturquoise", fill = "paleturquoise1") + xlab("Percent Unemployed") + ylab("Frequency")
+g3 <- ggplot(data = data1, aes(x = `PER CAPITA INCOME`)) + 
+  geom_histogram(binwidth = 10000, color = "lightpink", fill = "lightpink1") + xlab("Per Capita Income") + ylab("Frequency")
+g4 <- ggplot(data = data1, aes(x = `HARDSHIP INDEX`)) + 
+  geom_histogram(binwidth = 20, color = "plum", fill = "plum1") + xlab("Hardship Index (1-100)") + ylab("Frequency")
+grid.arrange(g1, g2, g3, g4, nrow = 2)
+```
+
+##
+```{r, echo = FALSE}
+stats <- sapply(data1[,c('PERCENT HOUSEHOLDS BELOW POVERTY', 'PERCENT AGED 16+ UNEMPLOYED', 'PER CAPITA INCOME', 'HARDSHIP INDEX')], summary)
+stats <- as.data.frame(round(t(stats), 2))
+row.names(stats) <- c("% Households Below Poverty", 
+                      "% Aged 16+ Unemployed",
+                      "Per Capita Income ($)", 
+                      "Hardship Index (1-100)")
+stats %>%
+  gt(rownames_to_stub = TRUE) %>%
+  tab_header(title = "Socioeconomic Indicators Summary (2008-2012)")
+```
+
+```{r, warning=FALSE, message = FALSE, include = FALSE}
+
+## obtain subset of Year = 2010
+sub <- df[df$Year == 2010,]
+
+## frequency table dataframe
+comm <- data.frame(table(sub$`Community Area`)) 
+colnames(comm) <- c("Community Area","Crime Rate")
+## remove community area 0
+comm <-comm[comm$`Community Area` != 0,]
+# find crime rate per 10,000 people
+#comm$`Crime Rate` <- comm$`Crime Rate`/(as.numeric(data1$POPULATION[-78])) * 10000
+
+## merge frequency dataframe with secondary dataset
+comm <- merge(comm, data1, by.x = "Community Area", by.y = "Community Area Number")
+colors <- c("red", "orange", "green", "blue", "magenta", "purple")
+
+## correlation plots with correlation coefficient and p-values
+p1 <- ggplot(data = comm, aes(x = `Crime Rate`, y = `PERCENT HOUSEHOLDS BELOW POVERTY`)) + 
+  geom_point(col = colors[1]) + 
+  geom_smooth(method='lm', formula= y~x, size = 0.25, col = "black", se = FALSE) + 
+  xlab("Crime Rate (per 10000 people)")+ ylab("% Households Below Poverty") +
+  stat_cor(label.x = 600, label.y = 55)
+
+p2 <- ggplot(data = comm, aes(x = `Crime Rate`, y = `PERCENT AGED 16+ UNEMPLOYED`)) + 
+  geom_point(col = colors[2]) + 
+  geom_smooth(method='lm', formula= y~x, size = 0.25, col = "black", se = FALSE) + 
+  xlab("Crime Rate (per 10000 people)") + ylab("% unemployed (Ages 16+)") +
+  stat_cor(label.x = 600, label.y = 55)
+
+p3 <- ggplot(data = comm, aes(x = `Crime Rate`, y = `PER CAPITA INCOME`, )) + 
+  geom_point(col = colors[4]) +geom_smooth(method='lm', formula= y~x, size = 0.25, col = "black", se = FALSE) + 
+  xlab("Crime Rate (per 10000 people)") +
+  ylab("Per Capita Income") + 
+  stat_cor(label.x = 500, label.y = 80000)
+
+p4 <- ggplot(data = comm, aes(x = `Crime Rate`, y = `HARDSHIP INDEX`)) + 
+  geom_point( col = colors[5]) + 
+  geom_smooth(method='lm', formula= y~x, size = 0.25, col = "black", se = FALSE) + 
+  xlab("Crime Rate (per 10000 people)") + ylab("Hardship Index (0-100)") + 
+  stat_cor(label.x = 600, label.y = 100)
+```
+
+## Title
+```{r, echo = FALSE}
+grid.arrange(p1, p2, p3, p4, nrow = 2, top="Four Socioeconomic Factors vs. Crime Rate, 2010")
+```
+
+
