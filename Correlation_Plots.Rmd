@@ -5,21 +5,22 @@ date: '2022-06-17'
 output: pdf_document
 ---
 
-```{r, echo = TRUE, warning=FALSE, message = FALSE}
+```{r, warning=FALSE, message = FALSE}
 library(ggpubr)
 library(ggplot2)
 library(data.table)
 library(dplyr)
 library(gridExtra)
+library(gt)
 
 df <- fread("C:\\Users\\melod\\Downloads\\crimes.csv")
 df <- select(df, -ID, -`Case Number`, -IUCR, -Block, -Description, -`Updated On`, -Ward, -Location)
 ## secondary dataset
 data1 <- fread("C:\\Users\\melod\\Downloads\\poverty.csv")
+data1 <- data1[1:77,]
 ```
 
-```{r, warning = FALSE, fig.width = 10, fig.height = 10}
-library(psych)
+```{r, warning = FALSE, message = FALSE}
 g1 <- ggplot(data = data1, aes(x = `PERCENT HOUSEHOLDS BELOW POVERTY`)) + 
   geom_histogram(binwidth = 10, color = "plum", fill = "plum1") + xlab("% Households Below Poverty") + ylab("Frequency")
 g2 <- ggplot(data = data1, aes(x = `PERCENT AGED 16+ UNEMPLOYED`)) + 
@@ -28,14 +29,27 @@ g3 <- ggplot(data = data1, aes(x = `PER CAPITA INCOME`)) +
   geom_histogram(binwidth = 10000, color = "lightpink", fill = "lightpink1") + xlab("Per Capita Income") + ylab("Frequency")
 g4 <- ggplot(data = data1, aes(x = `HARDSHIP INDEX`)) + 
   geom_histogram(binwidth = 20, color = "plum", fill = "plum1") + xlab("Hardship Index (1-100)") + ylab("Frequency")
+```
+
+
+```{r, fig.align='center'}
 grid.arrange(g1, g2, g3, g4, nrow = 2)
 ```
 
-```{r}
-describe(data1[ , c('PERCENT HOUSEHOLDS BELOW POVERTY', 'PERCENT AGED 16+ UNEMPLOYED', 'PER CAPITA INCOME', 'HARDSHIP INDEX')],fast=TRUE)
+
+```{r, fig.align = 'center'}
+stats <- sapply(data1[,c('PERCENT HOUSEHOLDS BELOW POVERTY', 'PERCENT AGED 16+ UNEMPLOYED', 'PER CAPITA INCOME', 'HARDSHIP INDEX')], summary)
+stats <- as.data.frame(round(t(stats), 2))
+row.names(stats) <- c("% Households Below Poverty", 
+                      "% Aged 16+ Unemployed",
+                      "Per Capita Income ($)", 
+                      "Hardship Index (1-100)")
+stats %>%
+  gt(rownames_to_stub = TRUE) %>%
+  tab_header(title = "Socioeconomic Indicators Summary (2008-2012)")
 ```
 
-```{r,echo = TRUE, warning=FALSE, message = FALSE}
+```{r, warning=FALSE, message = FALSE, include = FALSE}
 
 ## obtain subset of Year = 2010
 sub <- df[df$Year == 2010,]
@@ -46,7 +60,7 @@ colnames(comm) <- c("Community Area","Crime Rate")
 ## remove community area 0
 comm <-comm[comm$`Community Area` != 0,]
 # find crime rate per 10,000 people
-comm$`Crime Rate` <- comm$`Crime Rate`/(as.numeric(data1$POPULATION[-78])) * 10000
+comm$`Crime Rate` <- comm$`Crime Rate`/(as.numeric(data1$POPULATION)) * 10000
 
 ## merge frequency dataframe with secondary dataset
 comm <- merge(comm, data1, by.x = "Community Area", by.y = "Community Area Number")
@@ -78,7 +92,8 @@ p4 <- ggplot(data = comm, aes(x = `Crime Rate`, y = `HARDSHIP INDEX`)) +
   stat_cor(label.x = 600, label.y = 100)
 ```
 
-```{r, echo = TRUE, fig.width = 10, fig.height = 10}
+
+```{r, fig.align = 'center'}
 grid.arrange(p1, p2, p3, p4, nrow = 2, top="Four Socioeconomic Factors vs. Crime Rate, 2010")
 ```
 
