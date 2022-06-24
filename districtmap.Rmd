@@ -1,0 +1,70 @@
+---
+title: "districtmap"
+author: "Melody He"
+date: '2022-06-14'
+output: pdf_document
+---
+
+```{r, warning = FALSE, message = FALSE, results = 'false'}
+library(data.table)
+library(rgdal)
+library(dplyr)
+library(ggplot2)
+library(mapproj)
+library(tidyr)
+
+## Source: https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Districts-current-/fthy-xz3r
+df <- fread("C:\\Users\\melod\\Downloads\\crimes.csv")
+df <- select(df, -ID, -`Case Number`, -IUCR, -Block, -Description, -`Updated On`, -Ward, -Location)
+
+# import boundaries of police districts
+bounds <- readOGR("C:\\Users\\melod\\Downloads\\districts.shp",
+                  verbose = FALSE)
+# convert to dataframe
+bounds_df <- fortify(bounds)
+bounds_df$id <- as.factor(bounds_df$id)
+
+## map labels for district numbers to id in boundaries dataframe
+labs <- data.frame(bounds$dist_num)
+labs <- mutate(labs, id = strtoi(rownames(labs)) - 1)
+colnames(labs) <- c("District", "id")
+bounds_df <- merge(bounds_df, labs, by = "id")
+labs <- select(labs, District)
+
+# centroid calculations
+centroids <- as.data.frame(coordinates(bounds))
+colnames(centroids) = c("c.long", "c.lat")
+
+## district counts table
+district_counts <- as.data.frame(table(df$District))
+colnames(district_counts) = c("District", "Frequency")
+district_counts$Frequency <- district_counts$Frequency/1000
+
+dis.map <- merge(bounds_df, district_counts, by = 'District', all = TRUE)
+labs.df <- cbind(labs, centroids)
+labs.df <- labs.df[order(as.numeric(labs.df$District)), ]
+## manually adding centroid coordinates for 16th district
+labs.df[15, ] <- c(16, -87.91, 41.98)
+labs.df[nrow(labs.df)+1, ] <- c(16, -87.77, 41.97)
+## convert longitude and latitudes to doubles
+labs.df$c.long <- as.double(labs.df$c.long)
+labs.df$c.lat <- as.double(labs.df$c.lat)
+
+dis.map <- merge(dis.map, labs.df, by = 'District', all = TRUE)
+dis.map <- arrange(dis.map, group, order)
+```
+
+```{r, warning = FALSE, message = FALSE}
+map <- ggplot(dis.map[dis.map$District != 31,], aes(x = long, y = lat, group = group, fill = Frequency)) +
+  coord_map("polyconic") + 
+  geom_polygon(colour = "black")  +
+  ggtitle("Frequency of Crime by Police District") + 
+  scale_fill_gradient(low="white", high="slateblue3") +
+  geom_text(aes(label = `District`, x = c.long, y = c.lat, family = 'serif'), size = 3) + xlab("longitude") + ylab("latitude") + theme(text = element_text(family = "serif"))
+map <- map + labs(fill = "Frequency (in thousands)")
+map
+```
+
+
+
+
