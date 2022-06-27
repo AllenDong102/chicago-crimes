@@ -1,0 +1,736 @@
+---
+title: "An Exploration of Chicago Crime Data"
+author: "Amber Hu, Melody He, Elaine Liu, Allen Dong, Ronnie McDonald"
+output: pdf_document
+fontsize: 10pt
+geometry: margin=1in
+---
+
+```{r, include=FALSE}
+library(DBI)
+library(circlize)
+library(knitr)
+library(tidyverse)
+library(forcats)
+library(gridExtra)
+library(RSQLite)
+library(jsonlite)
+library(gtable)
+library(grid)
+library(latex2exp)
+library(gridBase)
+library(nnet)
+library(magrittr)
+library(ggplot2)
+library(data.table)
+library(ggmap)
+library(ggalluvial)
+library(stringr)
+library(ggpubr)
+library(gridExtra)
+library(psych)
+library(gt)
+library(rgdal)
+library(mapproj)
+library(tidyr)
+
+dcon <- dbConnect(RSQLite::SQLite(), 
+                  dbname = "chicago_crimes_db.sqlite")
+
+```
+
+
+```{sql, connection=dcon, output.var='mydf1', include=FALSE}
+SELECT Year, LocationDescription AS ld, count(*) AS n
+FROM chicago_crimes
+WHERE ld IN top8ld AND Year < 2022
+GROUP BY Year, ld;
+```
+
+
+```{sql, connection=dcon, output.var='mydf2', include=FALSE}
+SELECT substring(Date, 1, 2) AS Month, LocationDescription AS ld, count(*) AS n
+FROM chicago_crimes
+WHERE ld IN top8ld AND Year < 2022
+GROUP BY Month, ld;
+```
+
+
+```{sql, connection=dcon, output.var='mydf3', include=FALSE}
+SELECT *
+FROM time_ld
+```
+
+
+```{sql, connection=dcon, output.var='mydf4', include=FALSE}
+SELECT Year, PrimaryType AS pt, count(*) AS n
+FROM chicago_crimes
+WHERE pt IN top8pt AND Year < 2022
+GROUP BY Year, pt;
+```
+
+
+```{sql, connection=dcon, output.var='mydf5', include=FALSE}
+SELECT substring(Date, 1, 2) AS Month, PrimaryType AS pt, count(*) AS n
+FROM chicago_crimes
+WHERE pt IN top8pt AND Year < 2022
+GROUP BY Month, pt;
+```
+
+
+```{sql, connection=dcon, output.var='mydf6', include=FALSE}
+SELECT *
+FROM time_pt
+```
+
+# 1. An Introduction to the Data
+| This report details our analysis of a dataset extracted from the Chicago Police Department that reflects reported incidents of crime that occurred in the city of Chicago from 2001 to present. 
+|     The dataset contains comprehensive information on crime incidents in Chicago, covering a span of time and locations that we would work with. We selected a few key variables to discover and analyze trends from: geographical location (latitude/longitude), location type description, type of crime, time of occurrence, and arrest. For privacy reasons, crimes that fall under murder are not included in the dataset.
+|    The overall goal of this project is to not only establish an overview on the key variables, but also to unveil their underlying relationships through different combinations of those variables and gain a deeper understanding of crimes in Chicago. In our visualization and analysis, we addressed questions such as whether crime is seasonal, how type and location of crime are related, and how arrests are distributed by time.
+|    To supplement our primary dataset, we analyzed a second dataset extracted from the Chicago Department of Public Health. This dataset contains six socioeconomic indicators including poverty rate, per capita income, and unemployment by the main community areas in Chicago from 2008-2012. Through our secondary dataset, we hoped to understand how socioeconomic factors may correlate with the occurrence of crime in Chicago. 
+
+## 1.1 Importance of the Project
+| Crime impacts every individual and every community. Transparent and accessible crime data is essential for improving public safety on both an individual and municipal level. For individuals, a clear and informative representation of crime data provides essential information on how to better avoid the danger of crime when living in the city. For policy makers, the trends in crime data indicates whether current initiatives are effective, and new insights in crime data could lead to more accurate budgets, resource deployment, improved policies and other forms of response for different departments and neighborhoods, which could potentially reduce the overall crime rate in Chicago in the long run. With these goals in mind, we aim to create effective analysis and representation of crime data in Chicago.
+
+# 2. Examining Types of Crime
+| In this section, we are interested in subsetting the data based on the different types of crime, and comparing them to see how the crime types exhibit different patterns. We are especially interested in the crime types in relation to time, and we plotted them by year, month, and hour, all of which yielded interesting results. For these analyses, we used line plots because it is beneficial for showing and comparing changes through time. Because there are over 30 types of crime in the dataset, we extracted the eight most frequent types to be displayed and analyzed since these are the most notable.
+
+## 2.1 Reported Crimes by Year and Primary Type 
+| Nearly all major types of crime had an overall decrease in total count by time. The single exception is deceptive practice, which first maintained roughly constant, and then had a slight increase in the second decade. The slight disruption around 2008 - the peaks in theft, motor vehicle theft, and deceptive practice - coincided with the financial crisis which destabilized the economy. We also deduced that the Covid-19 pandemic might have contributed to the sharp fall of theft and battery in 2020 and 2021. With quarantines, work-from-home, and reduced business activities, there were less targets of theft and battery on the street, and therefore less of crime incidents.
+
+```{r, echo=FALSE, fig.width=8, fig.height=4}
+#by type, year
+ggplot(data = mydf4) +
+  aes(x = Year, y = n, color = pt) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 2001:2021) +
+  scale_y_continuous(breaks = seq(0, 100000, length.out = 5)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = 0.5)) +
+  labs(x = "Year", y = "Count",
+       title = "Number of Reported Crimes by Year and Primary Type",
+       col = "Primary Type") +
+  scale_color_discrete(name = "") -> yt
+yt
+```
+
+## 2.2 Reported Crimes by Month and Primary Type 
+| This plot shows the number of reported crimes by month, separated by primary types of crime. All major crime types are significantly more common in summer months than winter months. There is an obvious dip in numbers in February, which is the second coldest month in Chicago on average, and there are less criminal activities partly due to less targets in public and difficulty of committing crime in the cold. In contrast, Chicago has the greatest influx of tourists from June to September, and hence more targets of crime. For motor vehicle theft specifically, vehicle owners are more likely to leave their windows rolled down and be vulnerable to theft. In addition, the fact that May to August corresponds to summer vacation may imply more opportunities for juvenile carjacking in these months.
+
+```{r, echo=FALSE, fig.width=8, fig.height=4}
+#by type, month
+mydf5$Month <- as.numeric(mydf5$Month)
+ggplot(data = mydf5) +
+  aes(x = Month, y = n, color = pt) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = rep(1:12)) +
+  scale_y_continuous(breaks = seq(0, 150000, length.out = 4)) +
+  labs(x = "Month", y = "Count",
+       title = "Number of Reported Crimes by Month and Primary Type",
+       col = "Primary Type") +
+  scale_color_discrete(name = "") -> mt
+mt
+```
+
+## 2.3 Reported Crimes by Hour and Primary Type
+| The next plot shows the number of reported crimes by hour, separated by primary types of crime. All types of crime are less common at night and more frequent during the day. We can see that the line representing battery stands out as having a different shape between 1am and 5am. This can be explained by the nature of domestic violence which falls under battery.
+
+```{r, echo=FALSE, fig.width=8, fig.height=4}
+#by hour, type
+ggplot(data = mydf6) +
+  aes(x = Time, y = n, color = pt) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = rep(0:23)) +
+  scale_y_continuous(breaks = seq(0, 100000, length.out = 5)) +
+  labs(x = "Hour of Day", y = "Count",
+       title = "Number of Reported Crimes by Hour and Primary Type",
+       col = "Primary Type") +
+  scale_color_discrete(name = "") -> ht
+ht
+```
+
+## 2.4 Likelihood for Each Crime Type in a Day
+| The figure shows the likelihood of crime over the course of a day, specific to each crime type. The darker the color the more likely a crime would take place. The hours during which assault is most common is earlier than those of battery. This can be attributed to the nature of the crimes: assault refers to causing someone to fear harm, while battery refers to causing actual harm, and perpetrators are less likely to be caught at night. As aforementioned, domestic violence which falls under battery is also a contributing factor. There are two peaks for narcotics, which are at around noon and at night, which is quite intuitive.
+
+```{r, echo=FALSE, fig.align='center', fig.width=10}
+
+types <- c('Deceptive practice', 'Motor vehicle theft',
+                                  'Burglary', 'Assault', 'Narcotics',
+                                  'Criminal Damage', 'Battery', 'Theft')
+
+circos <- function(type){
+  convert_risk <- function(risk, max, min) {
+    (risk - min) / (max - min)
+  }
+  
+  mydf6 %>%
+    filter(pt == toupper(type)) %>%
+    select(Time, n) -> data6
+  
+  max <- max(data6$n)
+  min <- min(data6$n)
+  
+  data6 %>%
+    mutate(relative_risk = convert_risk(n, max, min)) %>%
+    select(Time, relative_risk) -> data6
+  
+  col_fun = colorRamp2(c(0, 0.5, 1), c('white', 'pink', 'red'))
+  par(mar = c(2, 2, 2, 2))
+  plot(c(-1.2, 1.2), c(-1.2, 1.2), type = "n", axes = FALSE, ann = FALSE, asp = 1)
+  angle = 90
+  for (i in 0:23) {
+    color <- filter(data6, Time == i)$relative_risk
+    draw.sector(angle, angle - 15, col = col_fun(color), border = 2)
+    angle <-  angle - 15
+  }
+  title(paste0("Likelihood of ", type)) #data sometimes a best estimate
+  text(0, 1.1, '0am')
+  text(0, -1.1, '12pm')
+  text(1.2, 0, '6am')
+  text(-1.2, 0, '6pm')
+}
+
+
+par(mfrow = c(2, 4))
+for (i in 1:8){
+  circos(types[i])
+}
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(knitr)
+library(tidyverse)
+library(forcats)
+library(gridExtra)
+library(RSQLite)
+library(jsonlite)
+library(gtable)
+library(latex2exp)
+library(gridBase)
+library(nnet)
+library(data.table)
+library(ggmap)
+library(ggalluvial)
+library(stringr)
+library(ggpubr)
+library(gridExtra)
+library(psych)
+library(gt)
+library(rgdal)
+library(mapproj)
+library(tidyr)
+```
+
+## 2.5 Alluvial Plot for Types of Crime by Location  
+| The final plot in this section is an alluvial plot mapping crime types to locations. The patterns on the graph largely correspond to the nature of different types of crimes. Narcotics happen almost entirely in streets and sidewalks. Nearly half of all theft cases and half of all criminal damage cases happen on streets solely. A majority of deceptive practice happened in residence. On sidewalks, battery is considerably more common than theft, but on streets, it’s the other way around.
+
+```{r, message=FALSE, warning=FALSE,fig.width=10, fig.height=10}
+full_data <- fread("/Users/allendong/Desktop/chicagocrimes.csv")
+
+# subsetting data
+data1 <- full_data
+names(data1)[names(data1) == 'Primary Type'] <- 'type'
+names(data1)[names(data1) == 'Location Description'] <- 'location'
+
+data1$location <- str_replace_all(data1$location,
+                                  "PARKING LOT/GARAGE\\(NON\\.RESID\\.\\)", 
+                                  "PARKING LOT/GARAGE")
+
+top_type <- data1 %>% 
+  count(type) %>% 
+  top_n(8, n) %>% 
+  pull(type)
+
+top_location <- data1 %>% 
+  filter(type %in% top_type) %>% 
+  count(location) %>% 
+  top_n(6, n) %>% 
+  pull(location)
+
+filtered_data1 <- data1 %>% 
+  filter(type %in% top_type & location %in% top_location)
+
+grouped_data1 <- filtered_data1 %>% group_by(type, location) %>% summarise(Freq = n())  
+personal_theme = theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data = grouped_data1,
+       aes(axis1 = type, axis2 = location, y = Freq)) +
+  geom_alluvium(aes(fill = location)) +
+  geom_stratum() +
+  geom_text(stat = "stratum",
+            aes(label = after_stat(stratum))) +
+  scale_x_discrete(limits = c('Type of Crime', 'Location of Crime'),
+                   expand = c(0.20, 0.05)) +
+  scale_fill_viridis_d() +
+  theme_void() +
+  theme(legend.position = "none") + 
+  ggtitle("Summary of Crime Cases in Chicago \nMapping Major Types of Crime to Major Locations") +
+  personal_theme
+
+```
+
+```{r, include=FALSE, warning=FALSE, message=FALSE}
+
+## Source: https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Districts-current-/fthy-xz3r
+df <- full_data
+df <- select(df, -ID, -`Case Number`, -IUCR, -Block, -Description, -`Updated On`, -Ward, -Location)
+
+# import boundaries of police districts
+bounds <- readOGR("/Users/allendong/Desktop/districts.shp")
+# convert to dataframe
+bounds_df <- fortify(bounds)
+bounds_df$id <- as.factor(bounds_df$id)
+
+## map labels for district numbers to id in boundaries dataframe
+labs <- data.frame(bounds$dist_num)
+labs <- mutate(labs, id = strtoi(rownames(labs)) - 1)
+colnames(labs) <- c("District", "id")
+bounds_df <- merge(bounds_df, labs, by = "id")
+labs <- select(labs, District)
+
+# centroid calculations
+centroids <- as.data.frame(coordinates(bounds))
+colnames(centroids) = c("c.long", "c.lat")
+
+## district counts table
+district_counts <- as.data.frame(table(df$District))
+colnames(district_counts) = c("District", "Frequency")
+district_counts$Frequency <- district_counts$Frequency/1000
+
+dis.map <- merge(bounds_df, district_counts, by = 'District', all = TRUE)
+labs.df <- cbind(labs, centroids)
+labs.df <- labs.df[order(as.numeric(labs.df$District)), ]
+## manually adding centroid coordinates for 16th district
+labs.df[15, ] <- c(16, -87.91, 41.98)
+labs.df[nrow(labs.df)+1, ] <- c(16, -87.77, 41.97)
+## convert longitude and latitudes to doubles
+labs.df$c.long <- as.double(labs.df$c.long)
+labs.df$c.lat <- as.double(labs.df$c.lat)
+
+dis.map <- merge(dis.map, labs.df, by = 'District', all = TRUE)
+dis.map <- arrange(dis.map, group, order)
+```
+
+
+# 3. Examining Location of Crime
+| After examining the primary types of crime that were occurring, we wanted to investigate where these incidents were happening. To do so, we created visualizations of the crime data using the latitude and longitude coordinates given in the dataset, as well as a shape file containing coordinates of Chicago’s police districts. Understanding where crimes occur is important as it allows both for law enforcement to operate with greater efficiency, diverting more resources to crime-heavy areas and less resources to crime infrequent areas. 
+
+## 3.1 Choropleth Map by Police Districts
+| There are 23 police districts in Chicago, numbered 1-25 (excluding 13, 21, and 23). A common strategy for reducing crime, known as hot-spot policing, is to concentrate resources and policing in small geographical area where crime is more prevalent. Thus, by visualizing the frequency of crimes that occur in districts, police departments will know which districts to focus their efforts on. The choropleth map below illustrates that districts 8 and 11 have had the greatest frequency of crime from 2001-2021. 
+
+```{r, echo = FALSE, warning = FALSE, fig.width=8, fig.height=6}
+map <- ggplot(dis.map[dis.map$District != 31,], aes(x = long, y = lat, group = group, fill = Frequency)) +
+  coord_map("polyconic") + 
+  geom_polygon(colour = "black")  +
+  ggtitle("Frequency of Crime by Police District") + 
+  scale_fill_gradient(low="white", high="slateblue3") +
+  geom_text(aes(label = `District`, x = c.long, y = c.lat, family = 'serif'), size = 3) + xlab("longitude") + ylab("latitude") + theme(text = element_text(family = "serif"))
+map <- map + labs(fill = "Frequency (in thousands)")
+map
+```
+
+## 3.2 Heat Map by Frequency
+| Without the restriction of district boundaries, we examine more closely which exact areas within districts of Chicago have the greatest frequency of crime. It’s clear that areas around neighborhoods like West Garfield Park and River North have a high frequency of crimes. 
+
+```{r, warning=FALSE, message = FALSE, fig.width=8, fig.height=3}
+# subset every seventh row
+ggmap::register_google(key = "AIzaSyCm7BZ4MsQho9D6BAhEJ8uvqbzCrRtUKrY")
+
+LatLonCounts <- as.data.frame(table(round(data1$Longitude,2), round(data1$Latitude,2)))
+LatLonCounts$Long <- as.numeric(as.character(LatLonCounts$Var1))
+LatLonCounts$Lat <- as.numeric(as.character(LatLonCounts$Var2))
+LatLonCounts2 <- subset(LatLonCounts, Freq > 0)
+p <- ggmap(get_googlemap(center = c(lon = -87.6298, lat = 41.8781), zoom = 11, scale = 2, maptype ='terrain', color = 'color', alpha = 0.5))
+```
+
+```{r, warning=FALSE, message = FALSE, fig.width=8, fig.height=3}
+p + geom_tile(data = LatLonCounts2, aes(x = Long, y = Lat, alpha = Freq), fill = "red") +
+  labs(x = 'Longitude', y = 'Latitude')
+```
+
+## 3.3 Heat Map by Arrest
+| To gain further perspective, we marked the cases by whether or not they resulted in an arrest. If the case did lead to an arrest, a blue dot is plotted and if not, a red dot is plotted. The graph is for the most part red, and it’s clear that most cases didn’t lead to an arrest. We can see many areas with a significant shade of blue dots like around West Garfield Park again and and around Bridgeport. In these cases, since the case did lead to an arrest, the case in question was likely more serious. However, the effectiveness of policing could also be a contributing factor.
+
+```{r, warning = FALSE, fig.width = 8, fig.height = 3, message = FALSE}
+sub <- data1[which(1:nrow(data1) %% 56 == 0),]
+p + geom_point(aes(x = Longitude, y = Latitude, col = Arrest), data = sub, alpha = 0.01, size = 3, show.legend=FALSE) +
+  labs(x = 'Longitude', y = 'Latitude')
+```
+
+\newpage
+
+## 3.4 Crime Locations Throughout the Years
+| Next we take a deeper look at the type of location in which crimes occurred. This supplementary knowledge is useful to law enforcement specifically because it allows them to more effectively respond to crimes; knowing where to look can save valuable seconds in serious situations. This information is also useful for everyday civilians; knowing what types of places one is most at risk is immensely useful information. We can see from the graph that the most common location crimes are reported in is the street followed by residence in the last two decades, with the exception of crimes in apartments exceeding crimes in residence in 2021.
+
+```{r, echo=FALSE, fig.width=8, fig.height=4}
+#by location, year
+ggplot(data = mydf1) +
+  aes(x = Year, y = n, color = ld) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 2001:2021) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = 0.5)) +
+  labs(x = "Year", y = "Count",
+       title = "Number of Reported Crimes by Year and Location Description",
+       col = "Location Description") +
+  scale_color_discrete(name = "",
+                       labels = c('Alley', 'Apartment', 'Public parking',
+                                  'Residence', 'School, public, building',
+                                  'Sidewalk', 'Small retail store', 'Street')) -> yl
+yl
+```
+
+## 3.5 Crime Locations by Month
+| A major takeaway is that crimes happen more outside during the middle months of the year and reach a low in the winter months which makes perfect sense if one considers the cold winters of Chicago. 
+
+```{r, echo=FALSE, fig.width=8, fig.height=4}
+#by location, month
+mydf2$Month <- as.numeric(mydf2$Month)
+ggplot(data = mydf2) +
+  aes(x = Month, y = n, color = ld) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:12) +
+  labs(x = "Month", y = "Count",
+       title = "Number of Reported Crimes by Month and Location Description",
+       col = "Location Description") +
+  scale_color_discrete(name = "",
+                       labels = c('Alley', 'Apartment', 'Public parking',
+                                  'Residence', 'School, public, building',
+                                  'Sidewalk', 'Small retail store', 'Street')) -> ml
+ml
+```
+
+\newpage
+
+## 3.6 Crime Locations By Hour
+| Crimes happen more on the street during night time which is intuitive. Crimes in residence and apartments share two peaks during daytime when most people are working. In most locations, crimes follow the trend of gradually increasing as it gets later before spiking during the night hours, showing the potential dangers of staying out at night. 
+
+```{r, echo=FALSE, fig.width=8, fig.height=4}
+#by hour, location
+ggplot(data = mydf3) +
+  aes(x = Time, y = n, color = ld) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 0:23) +
+  scale_y_continuous(breaks = seq(0, 150000, length.out = 4)) +
+  labs(x = "Hour of Day", y = "Count",
+       title = "Number of Reported Crimes by Hour and Location Description",
+       col = "Location Description") +
+  scale_color_discrete(name = "",
+                       labels = c('Alley', 'Apartment', 'Public parking',
+                                  'Residence', 'School, public, building',
+                                  'Sidewalk', 'Small retail store', 'Street')) -> hl
+hl
+```
+
+# 4. Examining the Factor of Arrest
+| In the previous sections, our analysis focused on the primary types of crime and location of crimes. Next, we are incorporating another factor - whether an arrest was made following the crime. Using the arrest column in the dataset, we subsetted all data into two groups and made the following plots in this section. Combined with other factors such as crime type and time, arrest rates yielded some uniquely interesting and valuable information.
+
+## 4.1 Arrest by Crime Types 
+|  This stacked barplot shows the counts of each major type of crime that did and did not lead to arrest. Narcotics is the only type of crime that almost always leads to arrest. The arrest proportion for all other types of crimes are low, but it is slightly higher for assault, other offenses, and battery. Comparing battery and theft side by side, we can see that battery has a lower total count but a higher total number of arrests. Battery causes actual physical harm to a person and hence is a more severe crime than theft, which is only the deprivation of property.
+
+```{r, include=FALSE}
+data6 <- full_data
+names(data6)[names(data6) == 'Primary Type'] <- 'type'
+
+top_type <- data6 %>% 
+  count(type) %>% 
+  top_n(10, n) %>% 
+  pull(type)
+
+grouped_data6 <- data6 %>% 
+  filter(type %in% top_type) %>% 
+  group_by(type, Arrest) %>%
+  summarise(Freq = n())   
+```
+
+```{r, warning=FALSE, message = FALSE, fig.width=8, fig.height = 3}
+ggplot(data = grouped_data6, aes(fill=Arrest, y=Freq, x=reorder(type, Freq, sum))) + 
+  geom_bar(position="stack", stat="identity") + 
+  ggtitle("Crime Arrest By Primary Type") +
+  scale_fill_viridis_d() + 
+  labs(x = 'Primary Type of Crime', y = 'Frequency of Crime') +
+  theme(axis.text.x = element_text(angle = 25, vjust = 1, hjust=1))
+```
+
+```{r, include=FALSE}
+convert_time <- function(date) {
+  hour <- as.numeric(str_sub(date, 12, 13))
+  is.am <- (str_sub(date, -2, -1) == 'AM') 
+  ifelse(hour == 12, ifelse(is.am, 0, 12), ifelse(is.am, hour, hour + 12))
+}
+
+data4 <- full_data %>%
+  mutate(Time = convert_time(Date)) %>%
+  group_by(Time, Arrest) %>% 
+  summarise(Freq = n())  
+
+```
+
+```{r, include=FALSE}
+data5 <- full_data %>% 
+  group_by(Year, Arrest) %>%
+  # filter(Year < 2022) %>% 
+  summarise(Freq = n())  
+```
+
+## 4.2 Arrest Proportion by Hour of Day
+| We next looked at how the proportion of arrest is related to the hour of day. We made a circular stacked barplot to visualize the proportion of all crimes that leads to arrest within every hour. A higher proportion for arrest may imply greater severity of crime, and to some extent correspond to the danger at that specific time. We are using these proportions to supplement the actual count of crime we plotted earlier in the circular plots in Section 2. Note that hour is not the time of the arrest, but the time of the crime incident.
+|     From the visualization, we observed that the proportion arrested is lowest in the morning from 5AM to 9AM, rises suddenly close to noon, falls gradually from in the hours after noon, but then rises to the highest level at night, as shown by the hours 19 to 23 on the plot. After midnight, it falls slowly as time approaches morning, which makes the cycle. This roughly coincides with people’s general impression of the more safe or dangerous time of a day, and also agrees with the circular plots for crime frequency in Section 2, in which the darker shades largely appear on the top left corner. 
+
+```{r, warning=FALSE, message = FALSE, fig.width=8, fig.height = 4}
+ggplot(data = data4, aes(fill=Arrest, y=Freq, x=Time)) + 
+  geom_bar(position="fill", stat="identity") + 
+  ggtitle("Proportion of Crime Arrested By Hour of the Day") +
+  scale_x_continuous(breaks = round(seq(0, 23, by = 1),1)) +
+  scale_fill_viridis_d() +
+  coord_polar() +
+  theme(axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())
+```
+
+## 4.3 Arrest Proportion By Year
+| We are also interested in how the proportion of arrest changes in the long run. In this bar plot plotting the proportion of all crimes arrested every year, we see an overall decrease in the proportion of arrests. However, it cannot be concluded that the general severity of crimes decreased. We are aware that Chicago’s policy on crime loosened under influence of the current political environment, and we believe that this is a more plausible explanation for the trend.
+
+```{r, warning=FALSE, message = FALSE}
+ggplot(data = data5, aes(fill=Arrest, y=Freq, x=Year)) + 
+  geom_bar(position="fill", stat="identity") + 
+  ggtitle("Proportion of Crime Arrested By Year") +
+  scale_y_continuous(breaks = round(seq(0, 1, by = 0.10),1)) +
+  scale_fill_viridis_d()
+
+
+```
+
+## 4.4 Killer Plot: Relationship Between Crime Type, Arrest, Domestic and Year
+| The killer plot we designed is called a butterfly plot. Like a pie chart, it represents proportion with area. Unlike other existing plots, however, the butterfly plot uses a cartesian format specifically for representing two categorical variables each with two possible values. 
+|   The fields we chose from our dataset are “Arrest” and “Domestic”, both with only “true” or “false” values for individual crime cases. The area of each square reflects the proportion of crime cases meeting the corresponding conditions specified on the x-axis and y-axis. For example, the square on the top right corner represents the proportion of crime that falls under “Arrest = TRUE” & “Domestic = TRUE”. The percentages labeled are rounded to the nearest whole number. For each year from 2001 to 2021, we made a butterfly plot for each of the 8 major types of crime and displayed them on the same page for the ease of comparison, so there are 21 pages in total, each containing 8 plots.
+|   To achieve the most effective visual effect, we colored the squares and quickly displayed the years one after another to produce a small animation. The total area in each plot is fixed, so when some squares shrink to the center, other squares grow from the center, which makes it easy to see the flow of crime cases from one category to another throughout the 21 years. This simple, dynamic representation sheds light on the trend of the data across these two variables that is difficult to display otherwise.
+
+```{sql, connection=dcon, output.var='mydf8', include=FALSE}
+SELECT Year, PrimaryType AS pt, count(*) AS n, Arrest, Domestic
+FROM chicago_crimes
+WHERE pt IN top8pt AND Year < 2022
+GROUP BY Year, pt, Arrest, Domestic;
+```
+
+```{sql, connection=dcon, output.var='mydf8a', include=FALSE}
+SELECT *
+FROM top8pt
+```
+
+```{r, echo=FALSE, fig.width=8, fig.height=4, fig.align='center'}
+yr = 2021
+  
+mydf8$Arrest <- as.logical(mydf8$Arrest)
+mydf8$Domestic <- as.logical(mydf8$Domestic)
+
+square_plot <- function(type, yr, color) {
+  data2 <- filter(mydf8, pt == type, Year == yr)
+  num <- sum(data2$n)
+  A1 <- sum(filter(data2, Arrest == TRUE, Domestic == TRUE)$n)/num
+  A2 <- sum(filter(data2, Arrest == TRUE, Domestic == FALSE)$n)/num
+  A3 <- sum(filter(data2, Arrest == FALSE, Domestic == TRUE)$n)/num
+  A4 <- sum(filter(data2, Arrest == FALSE, Domestic == FALSE)$n)/num
+  vp0 <- viewport(x = 0.5, y = 0.5, width = 0.8, height = 0.8)
+  pushViewport(vp0)
+  
+  #draws squre outline
+  grid.rect(gp = gpar(lwd = 1), vp = vp0)
+  grid.lines(x = unit(c(0, 1), 'npc'),
+             y = unit(c(0.5, 0.5), 'npc'),
+             vp = vp0)
+  grid.lines(x = unit(c(0.5, 0.5), 'npc'),
+             y = unit(c(0, 1), 'npc'),
+             vp = vp0)
+  
+  a <- 1/0.16 #adjusts all square size
+  vp1 <- viewport(x = 0.5, y = 0.5, width = sqrt(A1/a), height = sqrt(A1/a),
+                  just = c("left", "bottom"))
+  vp2 <- viewport(x = 0.5, y = 0.5, width = sqrt(A2/a), height = sqrt(A2/a),
+                  just = c("right", "bottom"))
+  vp3 <- viewport(x = 0.5, y = 0.5, width = sqrt(A3/a), height = sqrt(A3/a),
+                  just = c("left", "top"))
+  vp4 <- viewport(x = 0.5, y = 0.5, width = sqrt(A4/a), height = sqrt(A4/a),
+                  just = c("right", "top"))
+  fs <- 8
+
+    square <- function(vp, Ax) {
+      pushViewport(vp)
+      grid.draw(roundrectGrob(gp = gpar(lwd = 2, fill = color)))
+      txt <- paste0(round(Ax, digits = 2)*100, '%')
+      if (Ax < 0.2) {
+        popViewport()
+        if (Ax == A1) {
+          grid.text(txt, x = 0.7, y = 0.7, gp = gpar(fontsize = (fs)))
+        }
+        if (Ax == A2) {
+          grid.text(txt, x = 0.3, y = 0.7, gp = gpar(fontsize = (fs)))
+        }
+        if (Ax == A3) {
+          grid.text(txt, x = 0.7 , y = 0.3, gp = gpar(fontsize = (fs)))
+        }
+        if (Ax == A4) {
+          grid.text(txt, x = 0.3, y = 0.3, gp = gpar(fontsize = (fs)))
+        }
+      }
+      else {
+        grid.text(txt, x = 0.5, y = 0.5, gp = gpar(fontsize = (fs)), just = c('center'))
+        popViewport()
+      }
+  }
+  square(vp1, A1)
+  square(vp2, A2)
+  square(vp3, A3)
+  square(vp4, A4)
+  
+  #add text
+  pushViewport(vp0)
+  
+  grid.text('Arrested', x = -0.08, y = 0.75, rot = 90,
+            gp = gpar(fontsize = fs))
+  grid.text('Not arrested', x = -0.08, y = 0.25, rot = 90,
+            gp = gpar(fontsize = fs))
+  grid.text('Not domestic', x = 0.25, y = -0.07,
+            gp = gpar(fontsize = fs))
+  grid.text('Domestic', x = 0.75, y = -0.07,
+            gp = gpar(fontsize = fs))
+  grid.text(type, x = 0.5, y = 1.08, gp = gpar(fontsize = (fs + 1)))
+  popViewport(2)
+}
+
+
+types <- as.list(mydf8a$PrimaryType)
+colors <- c('#ff6961', '#ffb480', '#f8f38d', '#42d6a4', 
+            '#08cad1', '#59adf6', '#9d94ff', '#c780e8')
+
+killer <- function(yr) {
+  ly <- grid.layout(2, 4)
+  grid.newpage()
+  pushViewport(viewport(layout = ly))
+  for (i in 1:8) {
+    vp <- viewport(layout.pos.row = (i - 1) %/% 4 + 1,
+                   layout.pos.col = (i - 1) %% 4 + 1)
+    pushViewport(vp)
+    square_plot(types[[i]], yr, colors[i])
+    popViewport()
+  }
+}
+
+killer(yr)
+```
+*We created killer plots for every year from 2001 to 2021 (this was one interactive plot). In our report, we only display the year 2021, but you can find the rest of the graphs here: https://drive.google.com/file/d/1ceuxy3XPk2qqWis_BopfG8calVxNz-_R/view*
+
+|   Note that the simultaneous changes among different squares are not necessarily causal. They simply show the flow of proportions, and the source for those changes requires further analysis beyond this plot.
+|   From 2001 to 2021, all eight major types of crime witnessed a decrease in the proportion of crime cases that resulted in arrest, and an increase in the proportion of crime cases that are domestic. Considering the size of the dataset, the timespan of the observation, and consistency of these changes among all eight plots, we conclude that these are indeed significant trends.
+|   The types of crime that show the most significant decrease in arrest proportion are theft, assault, and motor vehicle theft. Interestingly, this decrease becomes more rapid in the last few years from 2015 onward. As mentioned in the previous section, we think this is likely the result of Chicago’s loosening policy on crimes.
+|   Crime types that have the biggest shift from non-domestic to domestic are battery and criminal damage. Among them, the killer plot for battery shows the most clear and consistent trend throughout the years: as the two squares on the left shrinks, the two squares on the right expand and gradually exceed the size of the squares on the left. We are not yet sure what drove crimes of almost all types to shift toward domestic at the same time.
+
+# 5. Examining Other Factors
+| Finally, we also wanted to examine how other factors, particularly socioeconomic factors, may influence the crime rate in Chicago. For our secondary analysis, we extracted and analyzed two datasets: one from the Chicago Department of Public Health, containing various socioeconomic indicators on Chicago’s 77 community areas from 2008 to 2012, and one from the Chicago census containing populations for each of these community areas in 2010. We then merged them with our primary dataset using the common variable: community area number. We performed a separate analysis on the secondary dataset and used regression models to visualize the correlation between these variables and crime rate.
+
+## 5.1 What are the Socioeconomic Conditions in Chicago?
+| In our secondary analysis, we focused on examining four main variables: percent of households below poverty, percent (aged 16+) unemployed, per capita income, and hardship index. The histograms below illustrate the distribution of these variables. Three variables - percent of households below poverty, percent unemployed, and per capita income - appear to have a right skewed distribution, while hardship index appears to have a bell shaped distribution. The five number summary table also displays important statistics about each of the variables.
+
+```{r, warning = FALSE,  message = FALSE}
+# library(psych)
+
+df <- fread("/Users/allendong/Desktop/chicagocrimes.csv")
+df <- select(df, -ID, -`Case Number`, -IUCR, -Block, -Description, -`Updated On`, -Ward, -Location)
+## secondary dataset
+data1 <- fread("/Users/allendong/Desktop/poverty.csv")
+data1 <- data1[1:77,]
+
+g1 <- ggplot(data = data1, aes(x = `PERCENT HOUSEHOLDS BELOW POVERTY`)) + 
+  geom_histogram(binwidth = 10, color = "plum", fill = "plum1") + xlab("% Households Below Poverty") + ylab("Frequency")
+g2 <- ggplot(data = data1, aes(x = `PERCENT AGED 16+ UNEMPLOYED`)) + 
+  geom_histogram(binwidth = 10, color = "paleturquoise", fill = "paleturquoise1") + xlab("Percent Unemployed") + ylab("Frequency")
+g3 <- ggplot(data = data1, aes(x = `PER CAPITA INCOME`)) + 
+  geom_histogram(binwidth = 10000, color = "lightpink", fill = "lightpink1") + xlab("Per Capita Income") + ylab("Frequency")
+g4 <- ggplot(data = data1, aes(x = `HARDSHIP INDEX`)) + 
+  geom_histogram(binwidth = 20, color = "plum", fill = "plum1") + xlab("Hardship Index (1-100)") + ylab("Frequency")
+# grid.arrange(g1, g2, g3, g4, nrow = 2)
+```
+
+```{r, echo = FALSE, fig.align='center'}
+grid.arrange(g1, g2, g3, g4, nrow = 2)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.}
+stats <- sapply(data1[,c('PERCENT HOUSEHOLDS BELOW POVERTY', 'PERCENT AGED 16+ UNEMPLOYED', 'PER CAPITA INCOME', 'HARDSHIP INDEX')], summary)
+stats <- as.data.frame(round(t(stats), 2))
+row.names(stats) <- c("% Households Below Poverty", 
+                      "% Aged 16+ Unemployed",
+                      "Per Capita Income ($)", 
+                      "Hardship Index (1-100)")
+stats %>%
+  gt(rownames_to_stub = TRUE) %>%
+  tab_header(title = "Socioeconomic Indicators Summary (2008-2012)")
+```
+
+## 5.2 How Are Socioeconomic Factors Correlated With Crime?
+| Over these past few years, there has been a widespread debate on what crime prevention strategies are most effective. There has been a growing public sentiment to redirect funds from police agencies to community based programs that target social and economic issues. Thus, in the light of these debates, we wanted to investigate the relationship between various socioeconomic factors and crime rate by creating regression models.
+|   As shown by the plots, percent of households below poverty and percent unemployed are strongly positively correlated, per capita income and crime rate are moderately negatively correlated, and the hardship index and crime rate are moderately positively correlated. All four p-values are well below the significance level, indicating there is significant evidence that there is a linear relationship between crime rate and the selected socioeconomic factors.
+
+```{r, warning=FALSE, message = FALSE, include = FALSE}
+
+## obtain subset of Year = 2010
+sub <- df[df$Year == 2010,]
+
+## frequency table dataframe
+comm <- data.frame(table(sub$`Community Area`)) 
+colnames(comm) <- c("Community Area","Crime Rate")
+## remove community area 0
+comm <-comm[comm$`Community Area` != 0,]
+# find crime rate per 10,000 people
+comm$`Crime Rate` <- comm$`Crime Rate`/(as.numeric(data1$POPULATION)) * 10000
+
+## merge frequency dataframe with secondary dataset
+comm <- merge(comm, data1, by.x = "Community Area", by.y = "Community Area Number")
+colors <- c("red", "orange", "green", "blue", "magenta", "purple")
+
+## correlation plots with correlation coefficient and p-values
+p1 <- ggplot(data = comm, aes(x = `Crime Rate`, y = `PERCENT HOUSEHOLDS BELOW POVERTY`)) + 
+  geom_point(col = colors[1]) + 
+  geom_smooth(method='lm', formula= y~x, size = 0.25, col = "black", se = FALSE) + 
+  xlab("Crime Rate (per 10000 people)")+ ylab("% Households Below Poverty") +
+  stat_cor(label.x = 600, label.y = 55)
+
+p2 <- ggplot(data = comm, aes(x = `Crime Rate`, y = `PERCENT AGED 16+ UNEMPLOYED`)) + 
+  geom_point(col = colors[2]) + 
+  geom_smooth(method='lm', formula= y~x, size = 0.25, col = "black", se = FALSE) + 
+  xlab("Crime Rate (per 10000 people)") + ylab("% unemployed (Ages 16+)") +
+  stat_cor(label.x = 600, label.y = 55)
+
+p3 <- ggplot(data = comm, aes(x = `Crime Rate`, y = `PER CAPITA INCOME`, )) + 
+  geom_point(col = colors[4]) +geom_smooth(method='lm', formula= y~x, size = 0.25, col = "black", se = FALSE) + 
+  xlab("Crime Rate (per 10000 people)") +
+  ylab("Per Capita Income") + 
+  stat_cor(label.x = 500, label.y = 80000)
+
+p4 <- ggplot(data = comm, aes(x = `Crime Rate`, y = `HARDSHIP INDEX`)) + 
+  geom_point( col = colors[5]) + 
+  geom_smooth(method='lm', formula= y~x, size = 0.25, col = "black", se = FALSE) + 
+  xlab("Crime Rate (per 10000 people)") + ylab("Hardship Index (0-100)") + 
+  stat_cor(label.x = 600, label.y = 100)
+```
+
+```{r, echo = FALSE}
+grid.arrange(p1, p2, p3, p4, nrow = 2, top="Four Socioeconomic Factors vs. Crime Rate, 2010")
+```
+
+# 6. Conclusion/Summary
+| Through our analysis of these datasets, we identified and explained many of the key trends in Chicago’s crime. 
+|   In section 2, we analyzed how the primary types of crime relate to time and location description. In Figures 2.1, 2.2, and 2.3, we analyzed how the type of crime relates to time in years, months, and hours of the day. Our final plot of this section, which mapped types of crime to their locations, revealed in what areas certain types of crime were more likely to occur. Our analysis of this data could inform individuals on what types of crime they are at greater risk of based on current time and their location. 
+|   In section 3, we analyzed how crime relates to geographical location in the city. Our first figure, the choropleth map depicting crime frequency by police district, showed which districts had a greater frequency of crime. Our second figure, which displayed the frequency of crime without regard to district or neighborhood boundaries, pinpointed smaller areas and more exact locations with greater concentrations of crime. Finally, we analyzed how top crime location descriptions relate to time in terms of years, months, and hours of the day. Our analysis in this section could be helpful to citizens by suggesting which areas in the city they might try to avoid and when they might be most at risk for crime. It could also help inform police forces on specific areas they could potentially increase or decrease policing. 
+|   In section 4, we incorporated the factor of arrest in our analyses in relation to other factors such as time and crime type. Specifically, we looked at how the proportion of arrest varies based on types of crime, hours of day, and years, and provided possible explanations for the trends observed. Finally, using our killer plot, we discovered a decrease in the proportion of crime cases that resulted in arrest, and an increase in the proportion of crime cases that are domestic throughout the years across all eight major types of crime.
+|   In section 5, we analyzed how socioeconomic factors in Chicago related to crime rate, focusing on four main variables: percent of households below poverty, percent unemployed, per capita income, and hardship index. We found that all four of these factors had a moderate to strong correlation with crime rate. Further analysis into socioeconomic conditions in Chicago with a more present dataset may help establish a causal effect on crime rate, and give policymakers insight into alternative strategies to reduce crime besides policing.
+|   Crime and the criminal justice system have always been one of society’s biggest problems, and it relates to many other social issues such as gun violence, socioeconomic inequality, police brutality, etc. There have been long-contested debates on why crime occurs, as well as the best policies for preventing and reducing crime.  In order to ensure public safety, a thorough analysis of crime data, as well as the many factors that potentially impact crime, is necessary for law enforcement to create effective and ethical policies. 
