@@ -4,6 +4,7 @@ author: "Amber Hu, Melody He, Elaine Liu, Allen Dong, Ronnie McDonald"
 output: pdf_document
 fontsize: 10pt
 geometry: margin=1in
+urlcolor: blue
 ---
 
 ```{r, include=FALSE}
@@ -505,6 +506,7 @@ ggplot(data = data5, aes(fill=Arrest, y=Freq, x=Year)) +
   geom_bar(position="fill", stat="identity") + 
   ggtitle("Proportion of Crime Arrested By Year") +
   scale_y_continuous(breaks = round(seq(0, 1, by = 0.10),1)) +
+  ylab("Proportion")+
   scale_fill_viridis_d()
 
 
@@ -734,3 +736,23 @@ grid.arrange(p1, p2, p3, p4, nrow = 2, top="Four Socioeconomic Factors vs. Crime
 |   In section 4, we incorporated the factor of arrest in our analyses in relation to other factors such as time and crime type. Specifically, we looked at how the proportion of arrest varies based on types of crime, hours of day, and years, and provided possible explanations for the trends observed. Finally, using our killer plot, we discovered a decrease in the proportion of crime cases that resulted in arrest, and an increase in the proportion of crime cases that are domestic throughout the years across all eight major types of crime.
 |   In section 5, we analyzed how socioeconomic factors in Chicago related to crime rate, focusing on four main variables: percent of households below poverty, percent unemployed, per capita income, and hardship index. We found that all four of these factors had a moderate to strong correlation with crime rate. Further analysis into socioeconomic conditions in Chicago with a more present dataset may help establish a causal effect on crime rate, and give policymakers insight into alternative strategies to reduce crime besides policing.
 |   Crime and the criminal justice system have always been one of society’s biggest problems, and it relates to many other social issues such as gun violence, socioeconomic inequality, police brutality, etc. There have been long-contested debates on why crime occurs, as well as the best policies for preventing and reducing crime.  In order to ensure public safety, a thorough analysis of crime data, as well as the many factors that potentially impact crime, is necessary for law enforcement to create effective and ethical policies. 
+
+\newpage
+
+## Appendix
+
+[Chicago Crime Data](https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2)
+
+This dataset is our primary dataset for this report. Extracted from the Chicago Police Department, it contains reported incidents of Crime in Chicago from 2001 to the present.  
+
+[Poverty Level by Community](https://data.cityofchicago.org/Health-Human-Services/below-poverty-level-by-community/b7zw-zvm2)
+
+This dataset is our secondary dataset for this report. Extracted from the Chicago Department of Public Health, it contains six socioeconomic indicators on each of the 77 community areas in Chicago. 
+
+[Community Area Population](https://www.chicago.gov/city/en/depts/dcd/supp_info/community_area_2000and2010censuspopulationcomparisons.html)
+
+The file linked on the City of Chicago's website contains population data for each of Chicago's 77 community areas in 2010. It was combined with our secondary dataset and used to calculate crime rate in each community area.
+
+[Chicago Police Districts](https://data.cityofchicago.org/Public-Safety/Boundaries-Police3-Districts-current-/fthy-xz3r)
+
+The shape file linked on Chicago Data Portal's website contains boundary data on Chicago's police districts. It was used to create our chloropleth map in figure 3.1.
