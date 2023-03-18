@@ -1,6 +1,6 @@
 ---
 title: "An Exploration of Chicago Crime Data"
-author: "Amber Hu, Melody He, Elaine Liu, Allen Dong, Ronnie McDonald"
+author: "Amber Hu, Melody He, Elaine Liu, Allen Dong"
 output: pdf_document
 fontsize: 10pt
 geometry: margin=1in
